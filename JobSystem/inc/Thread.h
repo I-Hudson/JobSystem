@@ -4,7 +4,7 @@
 #include <thread>
 
 /// <summary>
-/// Single CPU thread. This is used to switch between fibers.
+/// Single CPU thread.
 /// </summary>
 class Thread
 {
@@ -21,9 +21,6 @@ public:
 
 	// Waits for Thread
 	void Join();
-
-	// Takes handle & id from currently running Thread
-	void FromCurrentThread();
 
 	// Getter
 	inline TLS* GetTLS() { return &m_tls; };

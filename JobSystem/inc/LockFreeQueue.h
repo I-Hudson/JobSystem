@@ -12,6 +12,7 @@ public:
 	LockFreeQueue(size_t buffer_size)
 		: buffer_(new cell_t[buffer_size])
 		, buffer_mask_(buffer_size - 1)
+		, m_capacity(buffer_size)
 	{
 		assert((buffer_size >= 2) && ((buffer_size & (buffer_size - 1)) == 0));
 		for (size_t i = 0; i != buffer_size; i += 1)
@@ -24,6 +25,13 @@ public:
 	{
 		delete[] buffer_;
 	}
+
+	uint32_t size()
+	{
+		return m_size.load(memory_order_acquire);
+	}
+
+	uint32_t capacity() const { return m_capacity; }
 
 	bool enqueue(const T& data)
 	{
@@ -48,6 +56,7 @@ public:
 		}
 		cell->data_ = data;
 		cell->sequence_.store(pos + 1, std::memory_order_release);
+		m_size.fetch_add(1, std::memory_order_release);
 		return true;
 	}
 
@@ -75,6 +84,7 @@ public:
 		data = cell->data_;
 		cell->sequence_.store
 		(pos + buffer_mask_ + 1, std::memory_order_release);
+		m_size.fetch_sub(1, std::memory_order_release);
 		return true;
 	}
 
@@ -87,6 +97,9 @@ private:
 
 	static size_t const     cacheline_size = 64;
 	typedef char            cacheline_pad_t[cacheline_size];
+
+	size_t				m_capacity;
+	std::atomic<size_t>     m_size;
 
 	cacheline_pad_t         pad0_;
 	cell_t* const           buffer_;

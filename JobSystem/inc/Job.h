@@ -3,12 +3,17 @@
 #include <atomic>
 #include <vector>
 #include <memory>
+#include <mutex>
+#include <condition_variable>
 #include "Thread.h"
 #include "JobFuncWrapper.h"
 #include "LockFreeQueue.h"
-#include "Counter.h"
 
 class JobSystemManager;
+class JobWaitList;
+class IJob;
+
+using JobPtr = IJob*;//std::shared_ptr<IJob>;
 
 struct NonCopyable
 {
@@ -37,8 +42,8 @@ class IJob : public NonCopyable
 {
 public:
 	IJob() = default;
-	IJob(std::unique_ptr<IJobFuncWrapper> funcWrapper);
-	IJob(std::unique_ptr<IJobFuncWrapper> funcWrapper, IJob * parentJob);
+	IJob(JobPriority priority, std::unique_ptr<IJobFuncWrapper> funcWrapper);
+	IJob(JobPriority priority, std::unique_ptr<IJobFuncWrapper> funcWrapper, JobPtr parentJob);
 	~IJob();
 
 	bool IsQueued() const { return m_state.load() == JobState::Queued; }
@@ -50,25 +55,46 @@ public:
 	JobState GetState() { return m_state.load(); }
 
 	virtual void Call();
+	void ReleaseLock();
 
-	inline void SetCounter(BaseCounter* counter)
+	void SetState(JobState state) { m_state.store(state); }
+
+	void Wait();
+	JobPtr Then(std::unique_ptr<IJobFuncWrapper> funcWrapper);
+
+	template<typename Func, typename... Args>
+	JobPtr Then(Func func, Args... args)
 	{
-		m_counter = counter;
-	}
-	inline BaseCounter* GetCounter() const
-	{
-		return m_counter;
+		std::unique_ptr<IJobFuncWrapper> funcWrapper = std::make_unique<JobFuncWrapper<Func, Args...>>(func, std::move(args)...);
+		return Then(std::move(funcWrapper));
 	}
 
 protected:
 	std::atomic<JobState> m_state;
-	std::vector<std::unique_ptr<IJob>> m_childrenJobs;
-	IJob* m_parentJob;
+	uint16_t m_currentChildJob = 0;
+	std::vector<JobPtr> m_childrenJobs;
+	JobPtr m_parentJob = nullptr;
+	JobPriority m_priority;
 
-	//Counter
-	BaseCounter* m_counter;
+	//std::mutex m_mutex;
+	std::condition_variable m_conditionVariable;
+	std::atomic_bool m_locked;
+
 	std::unique_ptr<IJobFuncWrapper> m_funcWrapper;
 
 private:
+	friend class JobWaitList;
 	friend class JobSystemManager;
+};
+
+/// <summary>
+/// Wait for all jobs within the list.
+/// </summary>
+class JobWaitList
+{
+public:
+	void AddJobToWaitOn(JobPtr job);
+	void Wait();
+private:
+	std::vector<JobPtr> m_jobsToWaitOn;
 };

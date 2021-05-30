@@ -49,12 +49,6 @@ void Thread::Join()
 	m_handle.join();
 }
 
-void Thread::FromCurrentThread()
-{
-	//m_handle = GetCurrentThread();
-	m_id = std::this_thread::get_id();
-}
-
 void Thread::SleepFor(uint32_t ms)
 {
 	std::this_thread::sleep_for(std::chrono::milliseconds(ms));
