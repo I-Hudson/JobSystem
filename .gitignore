@@ -3,6 +3,8 @@
 /bin-int
 /.vs
 
+*.vcxproj
+*.vcxproj.filters
 
 # Windows thumbnail cache files
 Thumbs.db
