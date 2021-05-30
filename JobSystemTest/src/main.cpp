@@ -63,16 +63,17 @@ std::vector<std::string> FillVector(std::string str)
 
 int main(int* argv, char** argc)
 {
-	JobSystemManagerOptions options;
-	options.NumThreads = 16;
+	js::JobSystemManagerOptions options;
+	options.NumThreads = 1;
 
-	JobSystemManager jobSystem(options);
-	if (jobSystem.Init() != JobSystemManager::ReturnCode::Succes)
+	js::JobSystemManager jobSystem(options);
+	if (jobSystem.Init() != js::JobSystemManager::ReturnCode::Succes)
 	{
 		std::cout << "Something went wrong." << '\n';
 	}
 
 	bool addingJobs = false;
+	std::shared_ptr<js::JobWithResult<void>> job;
 	while (true)
 	{
 		if (GetKeyState(VK_RETURN) & 0x8000)
@@ -86,43 +87,45 @@ int main(int* argv, char** argc)
 			std::vector<std::string> modles1 = FillVector("MODULES - 1");
 			std::vector<std::string> modles2 = FillVector("MODULES - 2");
 			std::vector<std::string> modles3 = FillVector("MODULES - 3");
-			JobPtr job = jobSystem.CreateJob(JobPriority::Normal, [&modles]()
+			job = jobSystem.CreateJob(js::JobPriority::Normal, [&modles]()
 			{
 				for (auto& str : modles)
 				{
 					std::cout << str << '\n';
 				}
 			});
-			JobPtr job1 = jobSystem.CreateJob(JobPriority::Normal, [&modles1]()
+/*			auto job1 = jobSystem.CreateJob(js::JobPriority::Normal, [&modles1]()
 			{
 				for (auto& str : modles1)
 				{
 					std::cout << str << '\n';
 				}
+				return 1.0f;
 			});
-			JobPtr job2 = jobSystem.CreateJob(JobPriority::Normal, [&modles2]()
+			auto job2 = jobSystem.CreateJob(js::JobPriority::Normal, [&modles2]()
 			{
 				for (auto& str : modles2)
 				{
 					std::cout << str << '\n';
 				}
+				return 1;
 			});			
-			JobPtr job3 = jobSystem.CreateJob(JobPriority::Normal, [&modles3]()
+			auto job3 = jobSystem.CreateJob(js::JobPriority::Normal, [&modles3]()
 			{
 				for (auto& str : modles3)
 				{
 					std::cout << str << '\n';
 				}
-			});			
-			jobSystem.ScheduleJob(job3);
+			});		*/	
 			jobSystem.ScheduleJob(job);
-			jobSystem.ScheduleJob(job2);
-			jobSystem.ScheduleJob(job1);
-			JobWaitList waitList;
+			//jobSystem.ScheduleJob(job3);
+			//jobSystem.ScheduleJob(job2);
+			//jobSystem.ScheduleJob(job1);
+			js::JobWaitList waitList;
 			waitList.AddJobToWaitOn(job);
-			waitList.AddJobToWaitOn(job1);
-			waitList.AddJobToWaitOn(job2);
-			waitList.AddJobToWaitOn(job3);
+			//waitList.AddJobToWaitOn(job1);
+			//waitList.AddJobToWaitOn(job2);
+			//waitList.AddJobToWaitOn(job3);
 			waitList.Wait();
 
 			/*JobPtr job = jobSystem.CreateJob(JobPriority::Low, []()
@@ -150,6 +153,7 @@ int main(int* argv, char** argc)
 		//std::cout << "Update Loop" << '\n';
 		jobSystem.Update(1);
 	}
+	job.reset();
 	jobSystem.Shutdown(true);
 
 	return 1;

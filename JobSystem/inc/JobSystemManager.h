@@ -5,107 +5,111 @@
 #include <array>
 #include "Job.h"
 
-class Thread;
-struct TLS;
-class Fiber;
-
-struct JobSystemManagerOptions
+namespace js
 {
-	JobSystemManagerOptions()
-		: NumThreads(std::thread::hardware_concurrency())
-	{ }
-	~JobSystemManagerOptions() = default;
+	class Thread;
+	struct TLS;
+	class Fiber;
 
-	// Threads & Fibers
-	uint8_t NumThreads;						// Amount of Worker Threads, default = amount of Cores
-	bool ThreadAffinity = true;				// Lock each Thread to a processor core, requires NumThreads == amount of cores
-
-	// Worker Queue Sizes
-	size_t HighPriorityQueueSize = 512;		// High Priority
-	size_t NormalPriorityQueueSize = 2048;	// Normal Priority
-	size_t LowPriorityQueueSize = 4096;		// Low Priority
-	size_t JobFinishedQueue = 4096;			// Finished queue
-
-	// Other
-	bool ShutdownAfterMainCallback = true;	// Shutdown everything after Main Callback returns?
-};
-
-class JobSystemManager
-{
-public:
-	enum class ReturnCode : uint8_t
+	struct JobSystemManagerOptions
 	{
-		Succes = 0,
+		JobSystemManagerOptions()
+			: NumThreads(std::thread::hardware_concurrency())
+		{ }
+		~JobSystemManagerOptions() = default;
 
-		UnknownError,
-		OSError,				// OS-API call failed
-		NullCallback,			// callback is nullptr
+		// Threads & Fibers
+		uint8_t NumThreads;						// Amount of Worker Threads, default = amount of Cores
+		bool ThreadAffinity = true;				// Lock each Thread to a processor core, requires NumThreads == amount of cores
 
-		AlreadyInitialized,		// Manager has already initialized
-		InvalidNumFibers,		// Fiber count is 0 or too high
-		ErrorThreadAffinity,	// ThreadAffinity is enabled, but Worker Thread Count > Available Cores
+		// Worker Queue Sizes
+		size_t HighPriorityQueueSize = 512;		// High Priority
+		size_t NormalPriorityQueueSize = 2048;	// Normal Priority
+		size_t LowPriorityQueueSize = 4096;		// Low Priority
+		size_t JobFinishedQueue = 4096;			// Finished queue
+
+		// Other
+		bool ShutdownAfterMainCallback = true;	// Shutdown everything after Main Callback returns?
 	};
-	using Callback = void(*)(JobSystemManager*);
 
-	JobSystemManager(const JobSystemManagerOptions& = JobSystemManagerOptions());
-	~JobSystemManager();
-
-	// Initialize & Run Manager
-	ReturnCode Init();
-
-	template<typename Func, typename... Args>
-	JobPtr CreateJob(JobPriority priority, Func func, Args... args)
+	class JobSystemManager
 	{
-		std::unique_ptr<IJobFuncWrapper> funcWrapper = std::make_unique<JobFuncWrapper<Func, Args...>>(func, std::move(args)...);
-		IJob* job = new IJob(priority, std::move(funcWrapper));
-		//ScheduleJob(priority, job);
-		return job;
-	}
+	public:
+		enum class ReturnCode : uint8_t
+		{
+			Succes = 0,
 
-	// Shutdown all Jobs/Threads/Fibers
-	// blocking => wait for threads to exit
-	void Shutdown(bool blocking);
+			UnknownError,
+			OSError,				// OS-API call failed
+			NullCallback,			// callback is nullptr
 
-	// Jobs
-	void ScheduleJob(const JobPtr job);
-	void ScheduleJob(JobPriority priority, const JobPtr job, bool GetParentJob);
+			AlreadyInitialized,		// Manager has already initialized
+			InvalidNumFibers,		// Fiber count is 0 or too high
+			ErrorThreadAffinity,	// ThreadAffinity is enabled, but Worker Thread Count > Available Cores
+		};
+		using Callback = void(*)(JobSystemManager*);
 
-	void WaitForAll();
+		JobSystemManager(const JobSystemManagerOptions & = JobSystemManagerOptions());
+		~JobSystemManager();
 
-	// Small update function.
-	void Update(uint32_t jobsToFree = -1);
+		// Initialize & Run Manager
+		ReturnCode Init();
 
-	// Getter
-	inline bool IsShuttingDown() const { return m_shuttingDown.load(std::memory_order_acquire); };
-	const uint8_t GetNumThreads() const { return m_numThreads; };
-	inline const std::thread::id& GetMainThreadId() const { return m_mainThreadId; }
+		template<typename Func, typename... Args>
+		static auto CreateJob(JobPriority priority, Func func, Args... args)
+		{
+			using ResultType = std::invoke_result_t<Func, Args...>;
+			JobResult<ResultType>* jobResult = new JobResult<ResultType>();
+			std::unique_ptr<IJobFuncWrapper> funcWrapper = std::make_unique<JobFuncWrapper<ResultType, Func, Args...>>(jobResult, func, std::move(args)...);
+			std::shared_ptr<JobWithResult<ResultType>> job = std::make_shared<JobWithResult<ResultType>>(priority, std::move(funcWrapper), jobResult);
+			return job;
+		}
 
-protected:
-	std::atomic_bool m_shuttingDown = false;
+		// Shutdown all Jobs/Threads/Fibers
+		// blocking => wait for threads to exit
+		void Shutdown(bool blocking);
 
-	// Threads
-	uint8_t m_numThreads;
-	Thread* m_threads = nullptr;
-	bool m_threadAffinity = false;
-	std::thread::id m_mainThreadId;
+		// Jobs
+		void ScheduleJob(const JobSharedPtr job);
+		void ScheduleJob(JobPriority priority, const JobSharedPtr& job, bool GetParentJob);
 
-	// Thread
-	uint8_t GetCurrentThreadIndex() const;
-	Thread* GetCurrentThread();
+		void WaitForAll();
 
-	LockFreeQueue<JobPtr> m_highPriorityQueue;
-	LockFreeQueue<JobPtr> m_normalPriorityQueue;
-	LockFreeQueue<JobPtr> m_lowPriorityQueue;
-	LockFreeQueue<JobPtr> m_finishedQueue;
+		// Small update function.
+		void Update(uint32_t jobsToFree = -1);
 
-	LockFreeQueue<JobPtr>* GetQueueByPriority(JobPriority priority);
-	bool GetNextJob(JobPtr& job);
+		// Getter
+		inline bool IsShuttingDown() const { return m_shuttingDown.load(std::memory_order_acquire); };
+		const uint8_t GetNumThreads() const { return m_numThreads; };
+		inline const std::thread::id& GetMainThreadId() const { return m_mainThreadId; }
 
-private:
-	Callback m_mainCallback = nullptr;
-	bool m_shutdownAfterMain = true;
+	protected:
+		std::atomic_bool m_shuttingDown = false;
 
-	static void ThreadCallback_Worker(Thread*);
+		// Threads
+		uint8_t m_numThreads;
+		Thread* m_threads = nullptr;
+		bool m_threadAffinity = false;
+		std::thread::id m_mainThreadId;
 
-	friend class BaseCounter;
-};
+		// Thread
+		uint8_t GetCurrentThreadIndex() const;
+		Thread* GetCurrentThread();
+
+		LockFreeQueue<JobSharedPtr> m_highPriorityQueue;
+		LockFreeQueue<JobSharedPtr> m_normalPriorityQueue;
+		LockFreeQueue<JobSharedPtr> m_lowPriorityQueue;
+		LockFreeQueue<JobSharedPtr> m_finishedQueue;
+
+		LockFreeQueue<JobSharedPtr>* GetQueueByPriority(JobPriority priority);
+		bool GetNextJob(JobSharedPtr& job);
+
+	private:
+		Callback m_mainCallback = nullptr;
+		bool m_shutdownAfterMain = true;
+
+		static void ThreadCallback_Worker(Thread*);
+
+		friend class BaseCounter;
+	};
+}

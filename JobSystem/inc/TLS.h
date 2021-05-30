@@ -4,11 +4,14 @@
 #include <atomic>
 #include <vector>
 
-struct TLS
+namespace js
 {
-	TLS() = default;
-	~TLS() = default;
+	struct TLS
+	{
+		TLS() = default;
+		~TLS() = default;
 
-	uint8_t ThreadIndex = UINT8_MAX;
-	bool SetAffinity = false;
-};
+		uint8_t ThreadIndex = UINT8_MAX;
+		bool SetAffinity = false;
+	};
+}
