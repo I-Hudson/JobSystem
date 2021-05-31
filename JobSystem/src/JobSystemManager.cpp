@@ -71,7 +71,7 @@ namespace js
 
 	void JobSystemManager::ScheduleJob(const JobSharedPtr job)
 	{
-		ScheduleJob(job->m_priority, job, true);
+		ScheduleJob(job->m_priority, job, false);
 	}
 
 	void JobSystemManager::ScheduleJob(JobPriority priority, const JobSharedPtr& job, bool GetParentJob)

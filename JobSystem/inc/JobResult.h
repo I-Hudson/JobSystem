@@ -28,7 +28,7 @@ namespace js
 		}
 		
 		bool IsReady() const { return m_isReady; }
-		ResultType GetResult() const { m_result; }
+		ResultType GetResult() const { return m_result; }
 
 	private:
 		ResultType m_result;

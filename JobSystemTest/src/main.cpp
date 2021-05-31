@@ -73,7 +73,7 @@ int main(int* argv, char** argc)
 	}
 
 	bool addingJobs = false;
-	std::shared_ptr<js::JobWithResult<void>> job;
+	//std::shared_ptr<js::JobWithResult<void>> job;
 	while (true)
 	{
 		if (GetKeyState(VK_RETURN) & 0x8000)
@@ -87,13 +87,22 @@ int main(int* argv, char** argc)
 			std::vector<std::string> modles1 = FillVector("MODULES - 1");
 			std::vector<std::string> modles2 = FillVector("MODULES - 2");
 			std::vector<std::string> modles3 = FillVector("MODULES - 3");
-			job = jobSystem.CreateJob(js::JobPriority::Normal, [&modles]()
+			auto startingJob = jobSystem.CreateJob(js::JobPriority::Normal, [&modles]()
 			{
 				for (auto& str : modles)
 				{
 					std::cout << str << '\n';
 				}
 			});
+			auto endJob = startingJob->Then([]()
+			{
+				return 42.7865413f;
+			});
+
+			jobSystem.ScheduleJob(startingJob);
+			endJob->Wait();
+			std::cout << "Job result is ready: " << endJob->IsReady() << '\n';
+			std::cout << "Job result: " << endJob->GetResult().GetResult() << '\n';
 /*			auto job1 = jobSystem.CreateJob(js::JobPriority::Normal, [&modles1]()
 			{
 				for (auto& str : modles1)
@@ -117,16 +126,16 @@ int main(int* argv, char** argc)
 					std::cout << str << '\n';
 				}
 			});		*/	
-			jobSystem.ScheduleJob(job);
+			//jobSystem.ScheduleJob(job);
 			//jobSystem.ScheduleJob(job3);
 			//jobSystem.ScheduleJob(job2);
 			//jobSystem.ScheduleJob(job1);
-			js::JobWaitList waitList;
-			waitList.AddJobToWaitOn(job);
+			//js::JobWaitList waitList;
+			//waitList.AddJobToWaitOn(job);
 			//waitList.AddJobToWaitOn(job1);
 			//waitList.AddJobToWaitOn(job2);
 			//waitList.AddJobToWaitOn(job3);
-			waitList.Wait();
+			//waitList.Wait();
 
 			/*JobPtr job = jobSystem.CreateJob(JobPriority::Low, []()
 			{
@@ -143,6 +152,7 @@ int main(int* argv, char** argc)
 			}
 			jobSystem.ScheduleJob(job);
 			job->Wait();*/
+			addingJobs = false;
 		}
 
 		if (GetKeyState(VK_SPACE) & 0x8000)
@@ -153,7 +163,7 @@ int main(int* argv, char** argc)
 		//std::cout << "Update Loop" << '\n';
 		jobSystem.Update(1);
 	}
-	job.reset();
+	//job.reset();
 	jobSystem.Shutdown(true);
 
 	return 1;

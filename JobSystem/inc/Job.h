@@ -77,15 +77,14 @@ namespace js
 		void Wait();
 
 		template<typename Func, typename... Args>
-		JobPtr Then(Func func, Args... args)
+		auto Then(Func func, Args... args)
 		{
 			using ResultType = std::invoke_result_t<Func, Args...>;
-			JobResult<ResultType>* jobResult = new JobResult<ResultType>();
-			std::unique_ptr<IJobFuncWrapper> funcWrapper = std::make_unique<JobFuncWrapper<Func, Args...>>(jobResult, func, std::move(args)...);
-			std::shared_ptr<JobWithResult<ResultType>> job = std::make_shared<JobWithResult<ResultType>>(priority, std::move(funcWrapper), jobResult);
-
-			m_childrenJobs.push_back(std::move(job));
-			return m_childrenJobs.at(m_childrenJobs.size() - 1);
+			std::unique_ptr<JobResult<ResultType>> jobResult = std::make_unique<JobResult<ResultType>>();
+			std::unique_ptr<IJobFuncWrapper> funcWrapper = std::make_unique<JobFuncWrapper<ResultType, Func, Args...>>(jobResult.get(), func, std::move(args)...);
+			std::shared_ptr<JobWithResult<ResultType>> job = std::make_shared<JobWithResult<ResultType>>(m_priority, std::move(funcWrapper), this, std::move(jobResult));
+			m_childrenJobs.push_back(job);
+			return job;
 		}
 
 	protected:
@@ -106,27 +105,33 @@ namespace js
 		friend class JobSystemManager;
 	};
 
+	/// <summary>
+	/// Job with a return. 
+	/// </summary>
+	/// <typeparam name="ResultType"></typeparam>
 	template<typename ResultType>
 	class JobWithResult : public IJob
 	{
 	public:
-		JobWithResult(JobPriority priority, std::unique_ptr<IJobFuncWrapper> funcWrapper, JobResult<ResultType>* jobResult)
+		JobWithResult(JobPriority priority, std::unique_ptr<IJobFuncWrapper> funcWrapper, std::unique_ptr<JobResult<ResultType>> jobResult)
 			: IJob(priority, std::move(funcWrapper))
-			, m_result(jobResult)
+			, m_result(std::move(jobResult))
 		{ }
-		JobWithResult(JobPriority priority, std::unique_ptr<IJobFuncWrapper> funcWrapper, JobPtr parentJob, JobResult<ResultType>* jobResult)
+		JobWithResult(JobPriority priority, std::unique_ptr<IJobFuncWrapper> funcWrapper, JobPtr parentJob, std::unique_ptr<JobResult<ResultType>> jobResult)
 			: IJob(priority, std::move(funcWrapper), parentJob)
-			, m_result(jobResult)
+			, m_result(std::move(jobResult))
 		{ }
 
 		virtual ~JobWithResult() override
 		{
-			delete m_result;
+			m_result.reset();
 		}
+
+		bool IsReady() const { return m_result->IsReady(); }
 
 		JobResult<ResultType>& GetResult() { return *m_result; }
 
 	private:
-		JobResult<ResultType>* m_result = nullptr;
+		std::unique_ptr<JobResult<ResultType>> m_result = nullptr;
 	};
 }
