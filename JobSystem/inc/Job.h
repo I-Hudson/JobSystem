@@ -113,6 +113,10 @@ namespace Insight::JS
 	class JobWithResult : public IJob
 	{
 	public:
+		JobWithResult()
+			: IJob(JobPriority::Low, nullptr, nullptr)
+			, m_result(nullptr)
+		{ }
 		JobWithResult(JobPriority priority, std::unique_ptr<IJobFuncWrapper> funcWrapper, std::unique_ptr<JobResult<ResultType>> jobResult)
 			: IJob(priority, std::move(funcWrapper))
 			, m_result(std::move(jobResult))
