@@ -52,6 +52,12 @@ namespace Insight::JS
 		JobSystemManager(const JobSystemManagerOptions & = JobSystemManagerOptions());
 		~JobSystemManager();
 
+		static JobSystemManager& Instance()
+		{
+			static JobSystemManager manager;
+			return manager;
+		}
+
 		// Initialize & Run Manager
 		ReturnCode Init();
 
