@@ -67,7 +67,7 @@ namespace Insight::JS
 			using ResultType = std::invoke_result_t<Func, Args...>;
 			std::unique_ptr<JobResult<ResultType>> jobResult = std::make_unique<JobResult<ResultType>>();
 			std::unique_ptr<IJobFuncWrapper> funcWrapper = std::make_unique<JobFuncWrapper<ResultType, Func, Args...>>(jobResult.get(), func, std::move(args)...);
-			std::shared_ptr<JobWithResult<ResultType>> job = std::make_shared<JobWithResult<ResultType>>(priority, std::move(funcWrapper), std::move(jobResult));
+			JobWithResultSharedPtr<ResultType> job = std::make_shared<JobWithResult<ResultType>>(priority, std::move(funcWrapper), std::move(jobResult));
 			return job;
 		}
 

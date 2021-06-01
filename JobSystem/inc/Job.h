@@ -77,7 +77,7 @@ namespace Insight::JS
 			using ResultType = std::invoke_result_t<Func, Args...>;
 			std::unique_ptr<JobResult<ResultType>> jobResult = std::make_unique<JobResult<ResultType>>();
 			std::unique_ptr<IJobFuncWrapper> funcWrapper = std::make_unique<JobFuncWrapper<ResultType, Func, Args...>>(jobResult.get(), func, std::move(args)...);
-			std::shared_ptr<JobWithResult<ResultType>> job = std::make_shared<JobWithResult<ResultType>>(m_priority, std::move(funcWrapper), this, std::move(jobResult));
+			JobWithResultSharedPtr<ResultType> job = std::make_shared<JobWithResult<ResultType>>(m_priority, std::move(funcWrapper), this, std::move(jobResult));
 			m_childrenJobs.push_back(job);
 			return job;
 		}
@@ -88,17 +88,15 @@ namespace Insight::JS
 
 		void SetState(JobState state) { m_state.store(state); }
 
-	private:
+	protected:
 		std::atomic<JobState> m_state;
 		uint16_t m_currentChildJob = 0;
 		std::vector<JobSharedPtr> m_childrenJobs;
 		JobPtr m_parentJob = nullptr;
 		JobPriority m_priority;
-
 		//std::mutex m_mutex;
 		std::condition_variable m_conditionVariable;
 		std::atomic_bool m_locked;
-
 		std::unique_ptr<IJobFuncWrapper> m_funcWrapper;
 
 	private:
@@ -139,4 +137,7 @@ namespace Insight::JS
 	private:
 		std::unique_ptr<JobResult<ResultType>> m_result = nullptr;
 	};
+
+	template<typename ResultType>
+	using JobWithResultSharedPtr = std::shared_ptr<JobWithResult<ResultType>>;
 }

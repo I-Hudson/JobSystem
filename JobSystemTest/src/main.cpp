@@ -89,14 +89,14 @@ int main(int* argv, char** argc)
 			std::vector<std::string> modles1 = FillVector("MODULES - 1");
 			std::vector<std::string> modles2 = FillVector("MODULES - 2");
 			std::vector<std::string> modles3 = FillVector("MODULES - 3");
-			auto startingJob = jobSystem.CreateJob(JS::JobPriority::Normal, [&modles]()
+			auto startingJob = jobSystem.CreateJob(JS::JobPriority::Normal, [&modles]() -> void
 			{
 				for (auto& str : modles)
 				{
 					std::cout << str << '\n';
 				}
 			});
-			auto endJob = startingJob->Then([]()
+			Insight::JS::JobWithResultSharedPtr<float> endJob = startingJob->Then([]()
 			{
 				return 42.7865413f;
 			});
