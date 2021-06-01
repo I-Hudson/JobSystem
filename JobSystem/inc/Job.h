@@ -69,11 +69,6 @@ namespace Insight::JS
 		bool IsCancled() const { return m_state.load() == JobState::Canceled; }
 		JobState GetState() { return m_state.load(); }
 
-		virtual void Call();
-		void ReleaseLock();
-
-		void SetState(JobState state) { m_state.store(state); }
-
 		void Wait();
 
 		template<typename Func, typename... Args>
@@ -87,7 +82,13 @@ namespace Insight::JS
 			return job;
 		}
 
-	protected:
+	private:
+		virtual void Call();
+		void ReleaseLock();
+
+		void SetState(JobState state) { m_state.store(state); }
+
+	private:
 		std::atomic<JobState> m_state;
 		uint16_t m_currentChildJob = 0;
 		std::vector<JobSharedPtr> m_childrenJobs;
