@@ -132,8 +132,8 @@ namespace Insight::JS
 			m_result.reset();
 		}
 
+		bool IsValid() const { return m_result != nullptr; }
 		bool IsReady() const { return m_result->IsReady(); }
-
 		JobResult<ResultType>& GetResult() { return *m_result; }
 
 	private:
