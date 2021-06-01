@@ -6,7 +6,7 @@
 // Source: Dmitry Vyukov's MPMC
 // http://www.1024cores.net/home/lock-free-algorithms/queues/bounded-mpmc-queue
 
-namespace js
+namespace Insight::JS
 {
 	class IJob;
 

@@ -3,7 +3,7 @@
 #include "TLS.h"
 #include <thread>
 
-namespace js
+namespace Insight::JS
 {
 	/// <summary>
 	/// Single CPU thread.

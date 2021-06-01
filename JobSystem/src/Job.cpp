@@ -1,7 +1,7 @@
 #include "Job.h"
 #include "JobSystemManager.h"
 
-namespace js
+namespace Insight::JS
 {
 	IJob::IJob(JobPriority priority, std::unique_ptr<IJobFuncWrapper> funcWrapper)
 		: m_state(JobState::Queued)

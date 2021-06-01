@@ -5,7 +5,7 @@
 #include <array>
 #include "Job.h"
 
-namespace js
+namespace Insight::JS
 {
 	class Thread;
 	struct TLS;

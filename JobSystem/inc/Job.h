@@ -9,7 +9,7 @@
 #include "JobFuncWrapper.h"
 #include "LockFreeQueue.h"
 
-namespace js
+namespace Insight::JS
 {
 	class JobSystemManager;
 	class JobWaitList;

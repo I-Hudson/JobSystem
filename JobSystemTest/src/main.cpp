@@ -63,17 +63,19 @@ std::vector<std::string> FillVector(std::string str)
 
 int main(int* argv, char** argc)
 {
-	js::JobSystemManagerOptions options;
+	using namespace Insight;
+
+	JS::JobSystemManagerOptions options;
 	options.NumThreads = 1;
 
-	js::JobSystemManager jobSystem(options);
-	if (jobSystem.Init() != js::JobSystemManager::ReturnCode::Succes)
+	JS::JobSystemManager jobSystem(options);
+	if (jobSystem.Init() != JS::JobSystemManager::ReturnCode::Succes)
 	{
 		std::cout << "Something went wrong." << '\n';
 	}
 
 	bool addingJobs = false;
-	//std::shared_ptr<js::JobWithResult<void>> job;
+	//std::shared_ptr<JS::JobWithResult<void>> job;
 	while (true)
 	{
 		if (GetKeyState(VK_RETURN) & 0x8000)
@@ -87,7 +89,7 @@ int main(int* argv, char** argc)
 			std::vector<std::string> modles1 = FillVector("MODULES - 1");
 			std::vector<std::string> modles2 = FillVector("MODULES - 2");
 			std::vector<std::string> modles3 = FillVector("MODULES - 3");
-			auto startingJob = jobSystem.CreateJob(js::JobPriority::Normal, [&modles]()
+			auto startingJob = jobSystem.CreateJob(JS::JobPriority::Normal, [&modles]()
 			{
 				for (auto& str : modles)
 				{
@@ -103,7 +105,7 @@ int main(int* argv, char** argc)
 			endJob->Wait();
 			std::cout << "Job result is ready: " << endJob->IsReady() << '\n';
 			std::cout << "Job result: " << endJob->GetResult().GetResult() << '\n';
-/*			auto job1 = jobSystem.CreateJob(js::JobPriority::Normal, [&modles1]()
+/*			auto job1 = jobSystem.CreateJob(JS::JobPriority::Normal, [&modles1]()
 			{
 				for (auto& str : modles1)
 				{
@@ -111,7 +113,7 @@ int main(int* argv, char** argc)
 				}
 				return 1.0f;
 			});
-			auto job2 = jobSystem.CreateJob(js::JobPriority::Normal, [&modles2]()
+			auto job2 = jobSystem.CreateJob(JS::JobPriority::Normal, [&modles2]()
 			{
 				for (auto& str : modles2)
 				{
@@ -119,7 +121,7 @@ int main(int* argv, char** argc)
 				}
 				return 1;
 			});			
-			auto job3 = jobSystem.CreateJob(js::JobPriority::Normal, [&modles3]()
+			auto job3 = jobSystem.CreateJob(JS::JobPriority::Normal, [&modles3]()
 			{
 				for (auto& str : modles3)
 				{
@@ -130,7 +132,7 @@ int main(int* argv, char** argc)
 			//jobSystem.ScheduleJob(job3);
 			//jobSystem.ScheduleJob(job2);
 			//jobSystem.ScheduleJob(job1);
-			//js::JobWaitList waitList;
+			//JS::JobWaitList waitList;
 			//waitList.AddJobToWaitOn(job);
 			//waitList.AddJobToWaitOn(job1);
 			//waitList.AddJobToWaitOn(job2);

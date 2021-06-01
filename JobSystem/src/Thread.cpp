@@ -5,7 +5,7 @@
 #include <Windows.h>
 #endif
 
-namespace js
+namespace Insight::JS
 {
 	static void LaunchThread(void* ptr)
 	{

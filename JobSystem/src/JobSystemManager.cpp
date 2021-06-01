@@ -2,7 +2,7 @@
 #include "Thread.h"
 #include <thread>
 
-namespace js
+namespace Insight::JS
 {
 	JobSystemManager::JobSystemManager(const JobSystemManagerOptions& options)
 		: m_numThreads(options.NumThreads)

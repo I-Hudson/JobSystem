@@ -2,7 +2,7 @@
 
 #include "JobResult.h"
 
-namespace js
+namespace Insight::JS
 {
 	struct IJobFuncWrapper
 	{

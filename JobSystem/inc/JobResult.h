@@ -2,7 +2,7 @@
 
 #include <assert.h>
 
-namespace js
+namespace Insight::JS
 {
 	template<typename ResultType, bool>
 	struct IJobResult

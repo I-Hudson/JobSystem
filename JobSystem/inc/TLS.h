@@ -4,7 +4,7 @@
 #include <atomic>
 #include <vector>
 
-namespace js
+namespace Insight::JS
 {
 	struct TLS
 	{
