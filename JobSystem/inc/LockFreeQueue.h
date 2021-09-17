@@ -31,9 +31,9 @@ namespace Insight::JS
 			delete[] buffer_;
 		}
 
-		uint32_t size()
+		uint32_t size() const
 		{
-			return m_size.load(memory_order_acquire);
+			return static_cast<uint32_t>(m_size.load(std::memory_order::memory_order_acquire));
 		}
 
 		uint32_t capacity() const { return m_capacity; }
@@ -46,7 +46,7 @@ namespace Insight::JS
 			{
 				cell = &buffer_[pos & buffer_mask_];
 				size_t seq =
-					cell->sequence_.load(std::memory_order_acquire);
+					cell->sequence_.load(std::memory_order::memory_order_acquire);
 				intptr_t dif = (intptr_t)seq - (intptr_t)pos;
 				if (dif == 0)
 				{

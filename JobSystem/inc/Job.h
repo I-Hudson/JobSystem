@@ -13,6 +13,8 @@ namespace Insight::JS
 {
 	class JobSystemManager;
 	class JobWaitList;
+	class JobQueue;
+	class JobSystem;
 	class IJob;
 
 	using JobPtr = IJob*;
@@ -101,6 +103,8 @@ namespace Insight::JS
 
 	private:
 		friend class JobWaitList;
+		friend JobQueue;
+		friend JobSystem;
 		friend class JobSystemManager;
 	};
 

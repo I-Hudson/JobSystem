@@ -66,7 +66,7 @@ int main(int* argv, char** argc)
 	using namespace Insight;
 
 	JS::JobSystemManagerOptions options;
-	options.NumThreads = 1;
+	options.NumThreads = 8;
 
 	JS::JobSystemManager jobSystem(options);
 	if (jobSystem.Init() != JS::JobSystemManager::ReturnCode::Succes)
@@ -74,22 +74,24 @@ int main(int* argv, char** argc)
 		std::cout << "Something went wrong." << '\n';
 	}
 
+	JS::JobSystem localJS = jobSystem.CreateLocalJobSystem(2);
+	localJS.Release();
+
 	bool addingJobs = false;
-	//std::shared_ptr<JS::JobWithResult<void>> job;
 	while (true)
 	{
 		if (GetKeyState(VK_RETURN) & 0x8000)
 		{
-			if (addingJobs)
+			if (jobSystem.GetPendingJobsCount() > 0)
 			{
 				continue;
 			}
-			addingJobs = true;
+
 			std::vector<std::string> modles = FillVector("MODULES - 0");
 			std::vector<std::string> modles1 = FillVector("MODULES - 1");
 			std::vector<std::string> modles2 = FillVector("MODULES - 2");
 			std::vector<std::string> modles3 = FillVector("MODULES - 3");
-			auto startingJob = jobSystem.CreateJob(JS::JobPriority::Normal, [&modles]() -> void
+			auto startingJob = jobSystem.CreateJob(JS::JobPriority::Normal, [modles]() -> void
 			{
 				for (auto& str : modles)
 				{
@@ -102,7 +104,6 @@ int main(int* argv, char** argc)
 			});
 
 			jobSystem.ScheduleJob(startingJob);
-			endJob->Wait();
 			std::cout << "Job result is ready: " << endJob->IsReady() << '\n';
 			std::cout << "Job result: " << endJob->GetResult().GetResult() << '\n';
 /*			auto job1 = jobSystem.CreateJob(JS::JobPriority::Normal, [&modles1]()
@@ -154,8 +155,25 @@ int main(int* argv, char** argc)
 			}
 			jobSystem.ScheduleJob(job);
 			job->Wait();*/
-			addingJobs = false;
 		}
+
+		if (GetKeyState(VK_SHIFT) & 0x8000)
+		{
+			if (localJS.GetPendingJobsCount() > 0)
+			{
+				continue;
+			}
+			std::vector<std::string> modles = FillVector("Local thread job");
+			auto job = localJS.CreateJob(JS::JobPriority::Normal, [modles]()
+							  {
+								  for (auto& str : modles)
+								  {
+									  std::cout << str << '\n';
+								  }
+							  });
+			localJS.ScheduleJob(job);
+		}
+
 
 		if (GetKeyState(VK_SPACE) & 0x8000)
 		{

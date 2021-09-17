@@ -16,17 +16,21 @@ namespace Insight::JS
 		{
 			throw std::exception("[LaunchThread] LaunchThread: callback is nullptr");
 		}
-		callback(thread);
+		callback(thread, thread->GetUserdata());
 	}
 
-	bool Thread::Spawn(Callback callback, void* userData)
+	bool Thread::Spawn(Callback callback)
 	{
 		m_callback = callback;
-		m_userData = userData;
 
 		m_handle = std::thread(LaunchThread, this);
 		m_id = m_handle.get_id();
 		return HasSpawned();
+	}
+
+	void Thread::SetThreadData(JobSystemManager* manager, JobSystem* system)
+	{
+		m_userData = ThreadData{ manager, system };
 	}
 
 	void Thread::SetAffinity(size_t i)

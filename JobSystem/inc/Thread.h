@@ -5,20 +5,31 @@
 
 namespace Insight::JS
 {
+	class JobQueue;
+	class JobSystem;
+	class JobSystemManager;
+
+	struct ThreadData
+	{
+		JobSystemManager* Manager = nullptr;
+		JobSystem* System = nullptr;
+	};
+
 	/// <summary>
 	/// Single CPU thread.
 	/// </summary>
 	class Thread
 	{
 	public:
-		using Callback = void(*)(Thread*);
+		using Callback = void(*)(Thread*, ThreadData);
 
 		Thread() = default;
 		Thread(const Thread&) = delete;
 		virtual ~Thread() = default; // Note: destructor does not despawn Thread
 
 		// Spawns Thread with given Callback & Userdata
-		bool Spawn(Callback callback, void* userData = nullptr);
+		bool Spawn(Callback callback);
+		void SetThreadData(JobSystemManager* manager, JobSystem* system);
 		void SetAffinity(size_t i);
 
 		// Waits for Thread
@@ -27,7 +38,7 @@ namespace Insight::JS
 		// Getter
 		inline TLS* GetTLS() { return &m_tls; };
 		inline Callback GetCallback() const { return m_callback; };
-		inline void* GetUserdata() const { return m_userData; };
+		inline ThreadData GetUserdata() const { return m_userData; };
 		inline bool HasSpawned() const { return m_id != std::thread::id(); };
 		inline const std::thread::id GetID() const { return m_id; };
 
@@ -45,6 +56,6 @@ namespace Insight::JS
 		TLS m_tls;
 
 		Callback m_callback = nullptr;
-		void* m_userData = nullptr;
+		ThreadData m_userData = { };
 	};
 }
