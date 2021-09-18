@@ -66,7 +66,7 @@ int main(int* argv, char** argc)
 	using namespace Insight;
 
 	JS::JobSystemManagerOptions options;
-	options.NumThreads = 8;
+	options.NumThreads = 1;
 
 	JS::JobSystemManager jobSystem(options);
 	if (jobSystem.Init() != JS::JobSystemManager::ReturnCode::Succes)
@@ -74,23 +74,24 @@ int main(int* argv, char** argc)
 		std::cout << "Something went wrong." << '\n';
 	}
 
-	JS::JobSystem localJS = jobSystem.CreateLocalJobSystem(2);
-	localJS.Release();
+	std::shared_ptr<JS::JobSystem> localJS = jobSystem.CreateLocalJobSystem(1);
 
 	bool addingJobs = false;
 	while (true)
 	{
 		if (GetKeyState(VK_RETURN) & 0x8000)
 		{
-			if (jobSystem.GetPendingJobsCount() > 0)
-			{
-				continue;
-			}
+			//if (jobSystem.GetPendingJobsCount() > 0)
+			//{
+			//	continue;
+			//}
 
 			std::vector<std::string> modles = FillVector("MODULES - 0");
 			std::vector<std::string> modles1 = FillVector("MODULES - 1");
 			std::vector<std::string> modles2 = FillVector("MODULES - 2");
 			std::vector<std::string> modles3 = FillVector("MODULES - 3");
+			localJS->Release();
+			jobSystem.ReseveThreads(1);
 			auto startingJob = jobSystem.CreateJob(JS::JobPriority::Normal, [modles]() -> void
 			{
 				for (auto& str : modles)
@@ -159,19 +160,32 @@ int main(int* argv, char** argc)
 
 		if (GetKeyState(VK_SHIFT) & 0x8000)
 		{
-			if (localJS.GetPendingJobsCount() > 0)
+			if (localJS->GetPendingJobsCount() > 0)
 			{
 				continue;
 			}
-			std::vector<std::string> modles = FillVector("Local thread job");
-			auto job = localJS.CreateJob(JS::JobPriority::Normal, [modles]()
+			localJS->Release();
+
+ 			std::vector<std::string> modles = FillVector("Local thread job");
+			for (size_t i = 0; i < 1000; ++i)
+			{
+				auto job = localJS->CreateJob(JS::JobPriority::Normal, [modles]()
 							  {
 								  for (auto& str : modles)
 								  {
 									  std::cout << str << '\n';
 								  }
 							  });
-			localJS.ScheduleJob(job);
+				localJS->ScheduleJob(job);
+			}
+			localJS->ReserveThreads(1);
+			localJS->WaitForAll();
+		}
+
+		if (GetKeyState(VK_NUMPAD0) & 0x8000)
+		{
+			//JS::JobSystem js;
+			//js = localJS;
 		}
 
 
@@ -183,8 +197,13 @@ int main(int* argv, char** argc)
 		//std::cout << "Update Loop" << '\n';
 		jobSystem.Update(1);
 	}
-	//job.reset();
+	localJS->Release();
+
+	std::cout << "Local remaning jobs: " << localJS->GetPendingJobsCount() << '\n';
+	std::cout << "Main remaning jobs: " << jobSystem.GetPendingJobsCount() << '\n';
+
 	jobSystem.Shutdown(true);
+	//job.reset();
 
 	return 1;
 }

@@ -18,6 +18,7 @@ project "JobSystem"
     includedirs 
     {
 		"$(ProjectDir)inc",
+        "%{IncludeDir.readerwriterqueue}",
 	}
 
     filter "system:windows"

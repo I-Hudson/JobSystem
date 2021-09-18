@@ -2,6 +2,7 @@
 
 #include "TLS.h"
 #include <thread>
+#include <mutex>
 
 namespace Insight::JS
 {
@@ -21,7 +22,7 @@ namespace Insight::JS
 	class Thread
 	{
 	public:
-		using Callback = void(*)(Thread*, ThreadData);
+		using Callback = void(*)(Thread*);
 
 		Thread() = default;
 		Thread(const Thread&) = delete;
@@ -38,7 +39,7 @@ namespace Insight::JS
 		// Getter
 		inline TLS* GetTLS() { return &m_tls; };
 		inline Callback GetCallback() const { return m_callback; };
-		inline ThreadData GetUserdata() const { return m_userData; };
+		ThreadData GetUserdata();
 		inline bool HasSpawned() const { return m_id != std::thread::id(); };
 		inline const std::thread::id GetID() const { return m_id; };
 
@@ -57,5 +58,6 @@ namespace Insight::JS
 
 		Callback m_callback = nullptr;
 		ThreadData m_userData = { };
+		std::mutex m_userDataMutex;
 	};
 }

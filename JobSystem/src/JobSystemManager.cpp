@@ -19,7 +19,7 @@ namespace Insight::JS
 		{
 			++jobsFreed;
 			JobSharedPtr finishedJob = nullptr;
-			if (!m_finishedQueue.dequeue(finishedJob))
+			if (!m_finishedQueue.try_dequeue(finishedJob))
 			{
 				break;
 			}
@@ -29,7 +29,7 @@ namespace Insight::JS
 
 	uint32_t JobQueue::GetPendingJobsCount() const
 	{
-		return m_highPriorityQueue.size() + m_normalPriorityQueue.size() + m_lowPriorityQueue.size();
+		return m_highPriorityQueue.size_approx() + m_normalPriorityQueue.size_approx() + m_lowPriorityQueue.size_approx();
 	}
 
 	void JobQueue::ScheduleJob(const JobSharedPtr job)
@@ -63,7 +63,7 @@ namespace Insight::JS
 		}
 	}
 
-	LockFreeQueue<JobSharedPtr>* JobQueue::GetQueueByPriority(JobPriority priority)
+	moodycamel::ReaderWriterQueue<JobSharedPtr>* JobQueue::GetQueueByPriority(JobPriority priority)
 	{
 		switch (priority)
 		{
@@ -114,16 +114,25 @@ namespace Insight::JS
 		}
 
 		// High Priority Jobs always come first
-		if (m_highPriorityQueue.dequeue(job))
+		if (m_highPriorityQueue.try_dequeue(job))
 		{
 			return true;
 		}
 
 		// Normal & Low Priority Jobs
-		return	m_normalPriorityQueue.dequeue(job) ||
-			m_lowPriorityQueue.dequeue(job);
+		return	m_normalPriorityQueue.try_dequeue(job) ||
+			m_lowPriorityQueue.try_dequeue(job);
 	}
 
+	void JobQueue::Release()
+	{
+		JobSharedPtr job;
+		while(m_highPriorityQueue.try_dequeue(job) || m_normalPriorityQueue.try_dequeue(job) || m_lowPriorityQueue.try_dequeue(job))
+		{
+			job->SetState(JobState::Canceled);
+			job->ReleaseLock();
+		}
+	}
 
 	/// <summary>
 	/// JobSystem
@@ -134,10 +143,8 @@ namespace Insight::JS
 		//assert(false && "[JobSystem::JobSystem] JobSytem must be created from JobSystemManager using 'JobSystemManager::Instance()->CreateLocalJobSystem(numThreads)'.");
 	}
 
-	JobSystem::JobSystem(JobSystemManager* manager, std::vector<Thread*> threads, std::thread::id mainThreadId)
-		: m_numThreads(static_cast<uint32_t>(threads.size()))
-		, m_threads(std::move(threads))
-		, m_mainThreadId(std::move(mainThreadId))
+	JobSystem::JobSystem(JobSystemManager* manager, std::thread::id mainThreadId)
+		: m_mainThreadId(std::move(mainThreadId))
 		, m_manager(manager)
 	{
 		for (Thread* t : m_threads)
@@ -145,6 +152,23 @@ namespace Insight::JS
 			ThreadData tData = t->GetUserdata();
 			t->SetThreadData(tData.Manager, this);
 		}
+	}
+
+	JobSystem::JobSystem(JobSystem&& other)
+	{
+		m_manager = std::move(other.m_manager);
+		Release();
+		other.Release();
+
+		m_numThreads = other.m_numThreads;
+		m_mainThreadId = std::move(other.m_mainThreadId);
+		m_queue = std::move(other.m_queue);
+		ReserveThreads(GetNumThreads());
+	}
+
+	void JobSystem::ReserveThreads(uint32_t numThreads)
+	{
+		m_manager->ReseveThreads(*this, numThreads);
 	}
 
 	void JobSystem::Release()
@@ -164,7 +188,9 @@ namespace Insight::JS
 	}
 
 	void JobSystem::WaitForAll() const
-	{ }
+	{
+
+	}
 
 	void JobSystem::Update(uint32_t const& jobsToFree)
 	{
@@ -174,20 +200,6 @@ namespace Insight::JS
 	uint32_t JobSystem::GetPendingJobsCount() const
 	{
 		return m_queue.GetPendingJobsCount();
-	}
-
-	void JobSystem::Shutdown(bool blocking)
-	{
-		assert(std::this_thread::get_id() == GetMainThreadId() && "[JobSystemManager::Shutdown] Shutdown must be called on the 'MainThread'.");
-		m_shuttingDown.store(true, std::memory_order_release);
-		if (blocking)
-		{
-			for (uint8_t i = 0; i < m_numThreads; ++i)
-			{
-				m_threads[i]->Join();
-			}
-		}
-		Update();
 	}
 
 	uint8_t JobSystem::GetCurrentThreadIndex() const
@@ -218,7 +230,7 @@ namespace Insight::JS
 		return nullptr;
 	}
 
-	LockFreeQueue<JobSharedPtr>* JobSystem::GetQueueByPriority(JobPriority priority)
+	moodycamel::ReaderWriterQueue<JobSharedPtr>* JobSystem::GetQueueByPriority(JobPriority priority)
 	{
 		return m_queue.GetQueueByPriority(priority);
 	}
@@ -226,6 +238,39 @@ namespace Insight::JS
 	bool JobSystem::GetNextJob(JobSharedPtr& job)
 	{
 		return m_queue.GetNextJob(job);
+	}
+
+	void JobSystem::AddThreads(std::vector<Thread*> threads)
+	{
+		m_threads.insert(m_threads.end(), threads.begin(), threads.end());
+		for (Thread* t : threads)
+		{
+			t->SetThreadData(m_manager, this);
+		}
+		m_numThreads = static_cast<uint32_t>(m_threads.size());
+	}
+
+	void JobSystem::RemoveThreads()
+	{
+		m_threads.clear();
+	}
+
+	void JobSystem::ClearQueue()
+	{
+		m_queue.Release();
+	}
+
+	void JobSystem::Shutdown(bool blocking)
+	{
+		assert(std::this_thread::get_id() == GetMainThreadId() && "[JobSystemManager::Shutdown] Shutdown must be called on the 'MainThread'.");
+		if (blocking)
+		{
+			for (uint8_t i = 0; i < m_numThreads; ++i)
+			{
+				m_threads[i]->Join();
+			}
+		}
+		Update();
 	}
 
 
@@ -241,6 +286,7 @@ namespace Insight::JS
 
 	JobSystemManager::~JobSystemManager()
 	{
+
 		delete[] m_allThreads;
 	}
 
@@ -275,48 +321,65 @@ namespace Insight::JS
 				return ReturnCode::OSError;
 			}
 			m_allThreads[i].SetThreadData(this, &m_mainJobSystem);
-			m_useableThreads.push_back(&m_allThreads[i]);
+			//m_useableThreads.push_back(&m_allThreads[i]);
 		}
+		m_mainJobSystem.m_manager = this;
+		m_mainJobSystem.m_mainThreadId = GetMainThreadId();
+		m_mainJobSystem.m_numThreads = m_numThreads;
+		m_mainJobSystem.AddThreads({ m_allThreads });
 
 		// Done
 		return ReturnCode::Succes;
 	}
 
-	JobSystem JobSystemManager::CreateLocalJobSystem(uint32_t numThreads)
+	std::shared_ptr<JobSystem> JobSystemManager::CreateLocalJobSystem(uint32_t numThreads)
 	{
-		if (static_cast<int>(m_useableThreads.size()) < numThreads)
+		std::shared_ptr<JobSystem> jobSystem = std::make_shared<JobSystem>(this, m_mainThreadId);
+		ReseveThreads(*jobSystem.get(), numThreads);
+		return jobSystem;
+	}
+
+	void JobSystemManager::ReseveThreads(uint32_t const& numThreads)
+	{
+		ReseveThreads(m_mainJobSystem, numThreads);
+	}
+
+	void JobSystemManager::ReseveThreads(JobSystem& jobSystem, uint32_t const& numThreads)
+	{
+		if (m_mainJobSystem.GetNumThreads() < numThreads)
 		{
 			std::cout << "[JobSystemManager::CreateLocalJobSystem] Requested threads more than usable threads." << '\n';
+			return;
 		}
 
-		int threadsLeft = static_cast<int>(m_useableThreads.size());
+		int threadsLeft = static_cast<int>(m_mainJobSystem.GetNumThreads());
 		threadsLeft -= numThreads;
 		if (threadsLeft <= 0)
 		{
 			std::cout << "[JobSystemManager::CreateLocalJobSystem] No threads left for main job system." << '\n';
 		}
 
-		std::vector<Thread*>::iterator itr = m_useableThreads.begin() + numThreads;
+		std::vector<Thread*>::iterator itr = m_mainJobSystem.m_threads.begin() + numThreads;
 		std::vector<Thread*> jsThreads(numThreads);
-		std::move(m_useableThreads.begin(), itr, jsThreads.begin());
-		m_useableThreads.erase(m_useableThreads.begin(), itr);
-		m_reservedThreads.insert(m_reservedThreads.end(), jsThreads.begin(), jsThreads.end());
-
-		return JobSystem(this, std::move(jsThreads), m_mainThreadId);
+		std::move(m_mainJobSystem.m_threads.begin(), itr, jsThreads.begin());
+		m_mainJobSystem.m_threads.erase(m_mainJobSystem.m_threads.begin(), itr);
+		jobSystem.AddThreads(jsThreads);
 	}
 
 	void JobSystemManager::ReleaseJobSystem(JobSystem& jobSystem)
 	{
-		m_useableThreads.insert(jobSystem.m_threads.begin(), jobSystem.m_threads.end(), m_useableThreads.end());
-		for (Thread const* t : jobSystem.m_threads)
-		{
-			m_reservedThreads.erase(std::find(m_reservedThreads.begin(), m_reservedThreads.end(), t));
-		}
-		jobSystem.m_threads.clear();
+		m_mainJobSystem.AddThreads(jobSystem.m_threads);
+		jobSystem.RemoveThreads();
+		jobSystem.ClearQueue();
 	}
 
 	void JobSystemManager::Shutdown(bool blocking)
 	{
+		m_shuttingDown.store(true, std::memory_order_release);
+		for (std::shared_ptr<JobSystem>& js : m_jobSystems)
+		{
+			js->Shutdown(blocking);
+		}
 		m_mainJobSystem.Shutdown(blocking);
 	}
 
@@ -350,7 +413,7 @@ namespace Insight::JS
 		return m_mainJobSystem.GetCurrentThread();
 	}
 
-	LockFreeQueue<JobSharedPtr>* JobSystemManager::GetQueueByPriority(JobPriority priority)
+	moodycamel::ReaderWriterQueue<JobSharedPtr>* JobSystemManager::GetQueueByPriority(JobPriority priority)
 	{
 		return m_mainJobSystem.GetQueueByPriority(priority);
 	}
@@ -365,15 +428,15 @@ namespace Insight::JS
 		return m_mainJobSystem.GetPendingJobsCount();
 	}
 
-	void JobSystemManager::ThreadCallback_Worker(Thread* thread, ThreadData data)
+	void JobSystemManager::ThreadCallback_Worker(Thread* thread)
 	{
-		if (!data.Manager && !data.System)
-		{ return; }
+		ThreadData tData = thread->GetUserdata();
+		while (!tData.Manager && !tData.System)
+		{
+			tData = thread->GetUserdata();
+		}
 
-		JobSystemManager const* manager = data.Manager;
-		JobSystem* system = data.System;
 		auto tls = thread->GetTLS();
-
 		// Thread Affinity
 		if (tls->SetAffinity)
 		{
@@ -382,8 +445,9 @@ namespace Insight::JS
 
 		JobSharedPtr job = nullptr;
 		// Thread loop. Every thread will be running this loop looking for new jobs to execute.
-		while (!manager->IsShuttingDown())
+		while (!tData.Manager->IsShuttingDown())
 		{
+			JobSystem* system = thread->GetUserdata().System;
 			if (system->GetNextJob(job))
 			{
 				job->Call();

@@ -16,7 +16,7 @@ namespace Insight::JS
 		{
 			throw std::exception("[LaunchThread] LaunchThread: callback is nullptr");
 		}
-		callback(thread, thread->GetUserdata());
+		callback(thread);
 	}
 
 	bool Thread::Spawn(Callback callback)
@@ -30,7 +30,10 @@ namespace Insight::JS
 
 	void Thread::SetThreadData(JobSystemManager* manager, JobSystem* system)
 	{
-		m_userData = ThreadData{ manager, system };
+		{
+			std::lock_guard lock(m_userDataMutex);
+			m_userData = ThreadData{ manager, system };
+		}
 	}
 
 	void Thread::SetAffinity(size_t i)
@@ -53,6 +56,16 @@ namespace Insight::JS
 			return;
 		}
 		m_handle.join();
+	}
+
+	ThreadData Thread::GetUserdata()
+	{
+		ThreadData tData;
+		{
+			std::lock_guard lock(m_userDataMutex);
+			tData = m_userData;
+		}
+		return tData;
 	}
 
 	void Thread::SleepFor(uint32_t ms)
