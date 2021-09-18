@@ -203,7 +203,6 @@ int main(int* argv, char** argc)
 	std::cout << "Main remaning jobs: " << jobSystem.GetPendingJobsCount() << '\n';
 
 	jobSystem.Shutdown(true);
-	//job.reset();
 
 	return 1;
 }

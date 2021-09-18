@@ -19,7 +19,7 @@ outputdir = "%{cfg.buildcfg}-%{cfg.system}-%{cfg.architecture}"
 -- Include directories relative to root folder (solution directory)
 IncludeDir = {}
 IncludeDir["JobSystem"]         = "$(SolutionDir)JobSystem/inc/"
-IncludeDir["readerwriterqueue"] = "$(SolutionDir)JobSystem/vendor/readerwriterqueue"
+IncludeDir["readerwriterqueue"] = "$(SolutionDir)JobSystem/vendor"
 
 include "JobSystem"
 include "JobSystemTest"
