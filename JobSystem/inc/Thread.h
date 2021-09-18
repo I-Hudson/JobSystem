@@ -57,7 +57,7 @@ namespace Insight::JS
 		TLS m_tls;
 
 		Callback m_callback = nullptr;
-		ThreadData m_userData = { };
+		ThreadData m_userData;
 		std::mutex m_userDataMutex;
 	};
 }
