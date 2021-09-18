@@ -19,7 +19,6 @@ project "JobSystemTest"
     {
 		"$(ProjectDir)src",
         "%{IncludeDir.JobSystem}",
-        "%{IncludeDir.readerwriterqueue}",
 	}
 
     links

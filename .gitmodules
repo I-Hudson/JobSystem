@@ -1,6 +1,3 @@
 [submodule "JobSystem/vendor/concurrentqueue"]
 	path = JobSystem/vendor/concurrentqueue
 	url = https://github.com/cameron314/concurrentqueue
-[submodule "JobSystem/vendor/readerwriterqueue"]
-	path = JobSystem/vendor/readerwriterqueue
-	url = https://github.com/cameron314/readerwriterqueue

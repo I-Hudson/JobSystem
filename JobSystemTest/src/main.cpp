@@ -66,7 +66,6 @@ int main(int* argv, char** argc)
 	using namespace Insight;
 
 	JS::JobSystemManagerOptions options;
-	options.NumThreads = 1;
 
 	JS::JobSystemManager jobSystem(options);
 	if (jobSystem.Init() != JS::JobSystemManager::ReturnCode::Succes)
@@ -74,7 +73,7 @@ int main(int* argv, char** argc)
 		std::cout << "Something went wrong." << '\n';
 	}
 
-	std::shared_ptr<JS::JobSystem> localJS = jobSystem.CreateLocalJobSystem(1);
+	std::shared_ptr<JS::JobSystem> localJS = jobSystem.CreateLocalJobSystem(8);
 
 	bool addingJobs = false;
 	while (true)
@@ -164,21 +163,22 @@ int main(int* argv, char** argc)
 			{
 				continue;
 			}
-			localJS->Release();
 
  			std::vector<std::string> modles = FillVector("Local thread job");
+			uint32_t count = 0;
 			for (size_t i = 0; i < 1000; ++i)
 			{
-				auto job = localJS->CreateJob(JS::JobPriority::Normal, [modles]()
+				auto job = localJS->CreateJob(JS::JobPriority::Normal, [modles, &count]()
 							  {
-								  for (auto& str : modles)
-								  {
-									  std::cout << str << '\n';
-								  }
+								  //for (auto& str : modles)
+								  //{
+									//  std::cout << str << '\n';
+								  //}
+								  ++count;
+								  std::cout << count << '\n';
 							  });
 				localJS->ScheduleJob(job);
 			}
-			localJS->ReserveThreads(1);
 			localJS->WaitForAll();
 		}
 

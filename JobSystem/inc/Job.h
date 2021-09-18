@@ -7,7 +7,7 @@
 #include <condition_variable>
 #include "Thread.h"
 #include "JobFuncWrapper.h"
-#include "readerwriterqueue/readerwriterqueue.h"
+#include "LockFreeQueue.h"
 
 namespace Insight::JS
 {

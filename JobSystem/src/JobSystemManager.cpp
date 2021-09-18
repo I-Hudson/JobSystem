@@ -9,28 +9,11 @@ namespace Insight::JS
 		: m_highPriorityQueue(options.HighPriorityQueueSize)
 		, m_normalPriorityQueue(options.NormalPriorityQueueSize)
 		, m_lowPriorityQueue(options.LowPriorityQueueSize)
-		, m_finishedQueue(options.JobFinishedQueue)
+		, m_jobRunningQueue(options.HighPriorityQueueSize + options.NormalPriorityQueueSize + options.LowPriorityQueueSize)
 	{ }
 
 	void JobQueue::Update(uint32_t const& jobsToFree)
-	{
-		uint32_t jobsFreed = 0;
-		while (jobsFreed < jobsToFree)
-		{
-			++jobsFreed;
-			JobSharedPtr finishedJob = nullptr;
-			if (!m_finishedQueue.try_dequeue(finishedJob))
-			{
-				break;
-			}
-			finishedJob.reset();
-		}
-	}
-
-	uint32_t JobQueue::GetPendingJobsCount() const
-	{
-		return m_highPriorityQueue.size_approx() + m_normalPriorityQueue.size_approx() + m_lowPriorityQueue.size_approx();
-	}
+	{ }
 
 	void JobQueue::ScheduleJob(const JobSharedPtr job)
 	{
@@ -63,7 +46,7 @@ namespace Insight::JS
 		}
 	}
 
-	moodycamel::ReaderWriterQueue<JobSharedPtr>* JobQueue::GetQueueByPriority(JobPriority priority)
+	LockFreeQueue<JobSharedPtr>* JobQueue::GetQueueByPriority(JobPriority priority)
 	{
 		switch (priority)
 		{
@@ -109,25 +92,18 @@ namespace Insight::JS
 
 			job->SetState(JobState::Finished);
 			job->ReleaseLock();
-			assert(m_finishedQueue.enqueue(job) && "[JobSystemManager::GetNextJob] Job has finished. Finished queue is full.");
 			job = nullptr;
 		}
 
-		// High Priority Jobs always come first
-		if (m_highPriorityQueue.try_dequeue(job))
-		{
-			return true;
-		}
-
-		// Normal & Low Priority Jobs
-		return	m_normalPriorityQueue.try_dequeue(job) ||
-			m_lowPriorityQueue.try_dequeue(job);
+		return m_highPriorityQueue.dequeue(job) ||
+			   m_normalPriorityQueue.dequeue(job) ||
+			   m_lowPriorityQueue.dequeue(job);
 	}
 
 	void JobQueue::Release()
 	{
 		JobSharedPtr job;
-		while(m_highPriorityQueue.try_dequeue(job) || m_normalPriorityQueue.try_dequeue(job) || m_lowPriorityQueue.try_dequeue(job))
+		while(m_highPriorityQueue.dequeue(job) || m_normalPriorityQueue.dequeue(job) || m_lowPriorityQueue.dequeue(job))
 		{
 			job->SetState(JobState::Canceled);
 			job->ReleaseLock();
@@ -154,16 +130,9 @@ namespace Insight::JS
 		}
 	}
 
-	JobSystem::JobSystem(JobSystem&& other)
+	JobSystem::~JobSystem()
 	{
-		m_manager = std::move(other.m_manager);
 		Release();
-		other.Release();
-
-		m_numThreads = other.m_numThreads;
-		m_mainThreadId = std::move(other.m_mainThreadId);
-		m_queue = std::move(other.m_queue);
-		ReserveThreads(GetNumThreads());
 	}
 
 	void JobSystem::ReserveThreads(uint32_t numThreads)
@@ -189,17 +158,14 @@ namespace Insight::JS
 
 	void JobSystem::WaitForAll() const
 	{
-
+		//TODO:
+		while(GetPendingJobsCount() > 0 || GetRunningJobsCount() > 0)
+		{ }
 	}
 
 	void JobSystem::Update(uint32_t const& jobsToFree)
 	{
 		m_queue.Update(jobsToFree);
-	}
-
-	uint32_t JobSystem::GetPendingJobsCount() const
-	{
-		return m_queue.GetPendingJobsCount();
 	}
 
 	uint8_t JobSystem::GetCurrentThreadIndex() const
@@ -230,7 +196,7 @@ namespace Insight::JS
 		return nullptr;
 	}
 
-	moodycamel::ReaderWriterQueue<JobSharedPtr>* JobSystem::GetQueueByPriority(JobPriority priority)
+	LockFreeQueue<JobSharedPtr>* JobSystem::GetQueueByPriority(JobPriority priority)
 	{
 		return m_queue.GetQueueByPriority(priority);
 	}
@@ -286,7 +252,7 @@ namespace Insight::JS
 
 	JobSystemManager::~JobSystemManager()
 	{
-
+		assert(m_jobSystems.size() == 0 && "[JobSystemManager::~JobSystemManager] Not all job systems have been released before manager is destroyed.");
 		delete[] m_allThreads;
 	}
 
@@ -309,6 +275,7 @@ namespace Insight::JS
 			return ReturnCode::ErrorThreadAffinity;
 		}
 
+		std::vector<Thread*> spawnedThreads;
 		// Spawn Threads
 		for (uint8_t i = 0; i < m_numThreads; i++)
 		{
@@ -321,12 +288,12 @@ namespace Insight::JS
 				return ReturnCode::OSError;
 			}
 			m_allThreads[i].SetThreadData(this, &m_mainJobSystem);
-			//m_useableThreads.push_back(&m_allThreads[i]);
+			spawnedThreads.push_back(&m_allThreads[i]);
 		}
 		m_mainJobSystem.m_manager = this;
 		m_mainJobSystem.m_mainThreadId = GetMainThreadId();
 		m_mainJobSystem.m_numThreads = m_numThreads;
-		m_mainJobSystem.AddThreads({ m_allThreads });
+		m_mainJobSystem.AddThreads(spawnedThreads);
 
 		// Done
 		return ReturnCode::Succes;
@@ -336,6 +303,7 @@ namespace Insight::JS
 	{
 		std::shared_ptr<JobSystem> jobSystem = std::make_shared<JobSystem>(this, m_mainThreadId);
 		ReseveThreads(*jobSystem.get(), numThreads);
+		m_jobSystems.push_back(jobSystem);
 		return jobSystem;
 	}
 
@@ -363,6 +331,7 @@ namespace Insight::JS
 		std::vector<Thread*> jsThreads(numThreads);
 		std::move(m_mainJobSystem.m_threads.begin(), itr, jsThreads.begin());
 		m_mainJobSystem.m_threads.erase(m_mainJobSystem.m_threads.begin(), itr);
+		m_mainJobSystem.m_numThreads = threadsLeft;
 		jobSystem.AddThreads(jsThreads);
 	}
 
@@ -371,6 +340,10 @@ namespace Insight::JS
 		m_mainJobSystem.AddThreads(jobSystem.m_threads);
 		jobSystem.RemoveThreads();
 		jobSystem.ClearQueue();
+		m_jobSystems.erase(std::find_if(m_jobSystems.begin(), m_jobSystems.end(), [&jobSystem](std::shared_ptr<JobSystem> const& system) 
+						   {
+							   return &jobSystem == system.get();
+						   }));
 	}
 
 	void JobSystemManager::Shutdown(bool blocking)
@@ -413,7 +386,7 @@ namespace Insight::JS
 		return m_mainJobSystem.GetCurrentThread();
 	}
 
-	moodycamel::ReaderWriterQueue<JobSharedPtr>* JobSystemManager::GetQueueByPriority(JobPriority priority)
+	LockFreeQueue<JobSharedPtr>* JobSystemManager::GetQueueByPriority(JobPriority priority)
 	{
 		return m_mainJobSystem.GetQueueByPriority(priority);
 	}

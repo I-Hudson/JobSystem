@@ -19,7 +19,6 @@ namespace Insight::JS
 		size_t HighPriorityQueueSize = 512;		// High Priority
 		size_t NormalPriorityQueueSize = 2048;	// Normal Priority
 		size_t LowPriorityQueueSize = 4096;		// Low Priority
-		size_t JobFinishedQueue = 4096;			// Finished queue
 	};
 
 	class JobQueue
@@ -29,33 +28,24 @@ namespace Insight::JS
 
 		void Update(uint32_t const& jobsToFree);
 
-		uint32_t GetPendingJobsCount() const;
+		uint32_t GetPendingJobsCount() const { return m_highPriorityQueue.size() + m_normalPriorityQueue.size() + m_lowPriorityQueue.size(); }
+		uint32_t GetRunningJobsCount() const { return m_jobRunningQueue.size(); }
 
 		// Jobs
 		void ScheduleJob(const JobSharedPtr job);
 		void ScheduleJob(JobPriority priority, const JobSharedPtr& job, bool GetParentJob);
 
-		//JobQueue& operator=(JobQueue const& other)
-		//{
-		//	Release();
-		//	m_highPriorityQueue = other.m_highPriorityQueue;
-		//	m_normalPriorityQueue = other.m_normalPriorityQueue;
-		//	m_lowPriorityQueue = other.m_lowPriorityQueue;
-		//	m_finishedQueue = other.m_finishedQueue;
-		//	return *this;
-		//}
-
 	private:
-		moodycamel::ReaderWriterQueue<JobSharedPtr>* GetQueueByPriority(JobPriority priority);
+		LockFreeQueue<JobSharedPtr>* GetQueueByPriority(JobPriority priority);
 		bool GetNextJob(JobSharedPtr& job);
 
 		void Release();
 
 	private:
-		moodycamel::ReaderWriterQueue<JobSharedPtr> m_highPriorityQueue;
-		moodycamel::ReaderWriterQueue<JobSharedPtr> m_normalPriorityQueue;
-		moodycamel::ReaderWriterQueue<JobSharedPtr> m_lowPriorityQueue;
-		moodycamel::ReaderWriterQueue<JobSharedPtr> m_finishedQueue;
+		LockFreeQueue<JobSharedPtr> m_highPriorityQueue;
+		LockFreeQueue<JobSharedPtr> m_normalPriorityQueue;
+		LockFreeQueue<JobSharedPtr> m_lowPriorityQueue;
+		LockFreeQueue<JobSharedPtr> m_jobRunningQueue;
 
 		friend JobSystem;
 		friend JobSystemManager;
@@ -69,7 +59,9 @@ namespace Insight::JS
 	public:
 		JobSystem();
 		JobSystem(JobSystemManager* manager, std::thread::id mainThreadId);
-		JobSystem(JobSystem && other);
+		JobSystem(JobSystem const& other) = delete;
+		JobSystem(JobSystem && other) = delete;
+		~JobSystem();
 
 		template<typename Func, typename... Args>
 		static auto CreateJob(JobPriority priority, Func func, Args... args)
@@ -93,23 +85,15 @@ namespace Insight::JS
 		// Small update function.
 		void Update(uint32_t  const& jobsToFree = 64);
 
-		uint32_t GetPendingJobsCount() const;
+		uint32_t GetPendingJobsCount() const { return m_queue.GetPendingJobsCount(); }
+		uint32_t GetRunningJobsCount() const { return m_queue.GetRunningJobsCount(); }
 
 		// Getter
 		const uint32_t GetNumThreads() const { return m_numThreads; };
 		inline const std::thread::id& GetMainThreadId() const { return m_mainThreadId; }
 
 		JobSystem& operator=(JobSystem const& other) = delete;
-		JobSystem& operator=(JobSystem && other)
-		{
-			m_manager = std::move(other.m_manager);
-			Release();
-			m_numThreads = std::move(other.m_numThreads);
-			m_threads = std::move(other.m_threads);
-			m_mainThreadId = std::move(other.m_mainThreadId);
-			m_queue = std::move(other.m_queue);
-			return *this;
-		}
+		JobSystem& operator=(JobSystem&& other) = delete;
 
 	private:
 		void AddThreads(std::vector<Thread*> threads);
@@ -132,7 +116,7 @@ namespace Insight::JS
 		uint8_t GetCurrentThreadIndex() const;
 		Thread* GetCurrentThread() const;
 
-		moodycamel::ReaderWriterQueue<JobSharedPtr>* GetQueueByPriority(JobPriority priority);
+		LockFreeQueue<JobSharedPtr>* GetQueueByPriority(JobPriority priority);
 		bool GetNextJob(JobSharedPtr& job);
 
 		friend JobSystemManager;
@@ -237,7 +221,7 @@ namespace Insight::JS
 		uint32_t GetCurrentThreadIndex() const;
 		Thread* GetCurrentThread() const;
 
-		moodycamel::ReaderWriterQueue<JobSharedPtr>* GetQueueByPriority(JobPriority priority);
+		LockFreeQueue<JobSharedPtr>* GetQueueByPriority(JobPriority priority);
 		bool GetNextJob(JobSharedPtr& job);
 
 		JobSystem m_mainJobSystem;

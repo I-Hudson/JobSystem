@@ -18,7 +18,6 @@ project "JobSystem"
     includedirs 
     {
 		"$(ProjectDir)inc",
-        "$(ProjectDir)vendor",
 	}
 
     filter "system:windows"
