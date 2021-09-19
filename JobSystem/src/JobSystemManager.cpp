@@ -131,9 +131,7 @@ namespace Insight::JS
 	}
 
 	JobSystem::~JobSystem()
-	{
-		Release();
-	}
+	{ }
 
 	void JobSystem::ReserveThreads(uint32_t numThreads)
 	{
@@ -255,7 +253,9 @@ namespace Insight::JS
 		for (std::shared_ptr<JobSystem> const& js : m_jobSystems)
 		{
 			assert(js.use_count() == 1 && "[JobSystemManager::~JobSystemManager] Not all job systems have been released before manager is destroyed.");
+			js->Release();
 		}
+		Shutdown(true);
 		delete[] m_allThreads;
 	}
 

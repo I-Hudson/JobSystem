@@ -55,7 +55,10 @@ namespace Insight::JS
 		{
 			return;
 		}
-		m_handle.join();
+		if (m_handle.joinable())
+		{
+			m_handle.join();
+		}
 	}
 
 	ThreadData Thread::GetUserdata()
