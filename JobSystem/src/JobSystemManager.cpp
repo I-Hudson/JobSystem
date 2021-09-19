@@ -9,7 +9,7 @@ namespace Insight::JS
 		: m_highPriorityQueue(options.HighPriorityQueueSize)
 		, m_normalPriorityQueue(options.NormalPriorityQueueSize)
 		, m_lowPriorityQueue(options.LowPriorityQueueSize)
-		, m_jobRunningQueue(options.HighPriorityQueueSize + options.NormalPriorityQueueSize + options.LowPriorityQueueSize)
+		, m_jobRunningQueue(options.LowPriorityQueueSize)
 	{ }
 
 	void JobQueue::Update(uint32_t const& jobsToFree)
@@ -252,7 +252,10 @@ namespace Insight::JS
 
 	JobSystemManager::~JobSystemManager()
 	{
-		assert(m_jobSystems.size() == 0 && "[JobSystemManager::~JobSystemManager] Not all job systems have been released before manager is destroyed.");
+		for (std::shared_ptr<JobSystem> const& js : m_jobSystems)
+		{
+			assert(js.use_count() == 1 && "[JobSystemManager::~JobSystemManager] Not all job systems have been released before manager is destroyed.");
+		}
 		delete[] m_allThreads;
 	}
 
