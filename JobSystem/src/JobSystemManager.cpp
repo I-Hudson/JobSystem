@@ -2,6 +2,7 @@
 #include "Thread.h"
 #include <thread>
 #include <iostream>
+#include <algorithm>
 
 namespace Insight::JS
 {
@@ -42,7 +43,7 @@ namespace Insight::JS
 
 		if (!queue->enqueue(jobToSchedule))
 		{
-			throw std::exception("Job Queue is full!");
+			throw std::overflow_error("Job Queue is full!");
 		}
 	}
 
