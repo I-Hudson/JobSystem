@@ -1,3 +1,1 @@
-[submodule "JobSystem/vendor/concurrentqueue"]
-	path = JobSystem/vendor/concurrentqueue
-	url = https://github.com/cameron314/concurrentqueue
+
