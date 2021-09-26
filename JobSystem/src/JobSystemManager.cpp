@@ -2,6 +2,7 @@
 #include "Thread.h"
 #include <thread>
 #include <iostream>
+#include <algorithm>
 
 namespace Insight::JS
 {
@@ -9,7 +10,7 @@ namespace Insight::JS
 		: m_highPriorityQueue(options.HighPriorityQueueSize)
 		, m_normalPriorityQueue(options.NormalPriorityQueueSize)
 		, m_lowPriorityQueue(options.LowPriorityQueueSize)
-		, m_jobRunningQueue(options.HighPriorityQueueSize + options.NormalPriorityQueueSize + options.LowPriorityQueueSize)
+		, m_jobRunningQueue(options.LowPriorityQueueSize)
 	{ }
 
 	void JobQueue::Update(uint32_t const& jobsToFree)
@@ -42,7 +43,7 @@ namespace Insight::JS
 
 		if (!queue->enqueue(jobToSchedule))
 		{
-			throw std::exception("Job Queue is full!");
+			throw std::overflow_error("Job Queue is full!");
 		}
 	}
 
@@ -131,9 +132,7 @@ namespace Insight::JS
 	}
 
 	JobSystem::~JobSystem()
-	{
-		Release();
-	}
+	{ }
 
 	void JobSystem::ReserveThreads(uint32_t numThreads)
 	{
@@ -252,7 +251,12 @@ namespace Insight::JS
 
 	JobSystemManager::~JobSystemManager()
 	{
-		assert(m_jobSystems.size() == 0 && "[JobSystemManager::~JobSystemManager] Not all job systems have been released before manager is destroyed.");
+		for (std::shared_ptr<JobSystem> const& js : m_jobSystems)
+		{
+			assert(js.use_count() == 1 && "[JobSystemManager::~JobSystemManager] Not all job systems have been released before manager is destroyed.");
+			js->Release();
+		}
+		Shutdown(true);
 		delete[] m_allThreads;
 	}
 

@@ -1,6 +1,7 @@
 #include "Thread.h"
 #include <exception>
-#include <basetsd.h>
+#include <stdexcept>
+//#include <basetsd.h>
 #ifdef _WIN32
 #include <Windows.h>
 #endif
@@ -14,7 +15,7 @@ namespace Insight::JS
 
 		if (callback == nullptr)
 		{
-			throw std::exception("[LaunchThread] LaunchThread: callback is nullptr");
+			throw std::runtime_error("[LaunchThread] LaunchThread: callback is nullptr");
 		}
 		callback(thread);
 	}
@@ -55,7 +56,10 @@ namespace Insight::JS
 		{
 			return;
 		}
-		m_handle.join();
+		if (m_handle.joinable())
+		{
+			m_handle.join();
+		}
 	}
 
 	ThreadData Thread::GetUserdata()

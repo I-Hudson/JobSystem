@@ -16,9 +16,14 @@ namespace Insight::JS
 	class JobQueue;
 	class JobSystem;
 	class IJob;
+	template<typename ResultType>
+	class JobWithResult;
 
 	using JobPtr = IJob*;
 	using JobSharedPtr = std::shared_ptr<IJob>;
+
+	template<typename ResultType>
+	using JobWithResultSharedPtr = std::shared_ptr<JobWithResult<ResultType>>;
 
 	struct NonCopyable
 	{
@@ -141,7 +146,4 @@ namespace Insight::JS
 	private:
 		std::unique_ptr<JobResult<ResultType>> m_result = nullptr;
 	};
-
-	template<typename ResultType>
-	using JobWithResultSharedPtr = std::shared_ptr<JobWithResult<ResultType>>;
 }
