@@ -91,6 +91,7 @@ namespace Insight::JS
 		// Getter
 		const uint32_t GetNumThreads() const { return m_numThreads; };
 		inline const std::thread::id& GetMainThreadId() const { return m_mainThreadId; }
+		const std::thread::id GetThreadId(uint64_t threadIndex) const;
 
 		JobSystem& operator=(JobSystem const& other) = delete;
 		JobSystem& operator=(JobSystem&& other) = delete;
