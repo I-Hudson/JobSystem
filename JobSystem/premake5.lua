@@ -32,6 +32,3 @@ project "JobSystem"
 
     filter "configurations:Dist"
         optimize "full"
-
-    filter { "system:windows", "configurations:Release" }
-        buildoptions "/MT"
