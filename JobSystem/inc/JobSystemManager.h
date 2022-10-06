@@ -132,10 +132,10 @@ namespace Insight::JS
 
 		// Threads & Fibers
 		uint32_t NumThreads;						// Amount of Worker Threads, default = amount of Cores
-		bool ThreadAffinity = true;				// Lock each Thread to a processor core, requires NumThreads == amount of cores
+		bool ThreadAffinity = true;					// Lock each Thread to a processor core, requires NumThreads == amount of cores
 
 		// Other
-		bool ShutdownAfterMainCallback = true;	// Shutdown everything after Main Callback returns?
+		bool ShutdownAfterMainCallback = true;		// Shutdown everything after Main Callback returns?
 	};
 
 	class JobSystemManager
@@ -150,12 +150,13 @@ namespace Insight::JS
 			NullCallback,			// callback is nullptr
 
 			AlreadyInitialized,		// Manager has already initialized
+			InvalidNumThreads,		// Thread count is 0 or too high
 			InvalidNumFibers,		// Fiber count is 0 or too high
 			ErrorThreadAffinity,	// ThreadAffinity is enabled, but Worker Thread Count > Available Cores
 		};
 		using Callback = void(*)(JobSystemManager*);
 
-		JobSystemManager(const JobSystemManagerOptions & = JobSystemManagerOptions());
+		JobSystemManager();
 		~JobSystemManager();
 
 		static JobSystemManager& Instance()
@@ -165,14 +166,14 @@ namespace Insight::JS
 		}
 
 		// Initialize & Run Manager
-		ReturnCode Init();
+		ReturnCode Init(const JobSystemManagerOptions& job_systemManager_options);
 
 		/// <summary>
 		/// Create a new job system and reserving threads from the main pool.
 		/// </summary>
 		std::shared_ptr<JobSystem> CreateLocalJobSystem(uint32_t numThreads);
-		void ReseveThreads(uint32_t const& numThreads);
-		void ReseveThreads(JobSystem& jobSystem, uint32_t const& numThreads);
+		bool ReseveThreads(uint32_t const& numThreads);
+		bool ReseveThreads(JobSystem& jobSystem, uint32_t const& numThreads);
 		void ReleaseJobSystem(JobSystem& jobSystem);
 
 		template<typename Func, typename... Args>
@@ -200,7 +201,7 @@ namespace Insight::JS
 
 		// Getter
 		inline bool IsShuttingDown() const { return m_shuttingDown.load(std::memory_order_acquire); };
-		const uint32_t GetNumThreads() const { return m_numThreads; };
+		const uint32_t GetNumThreads() const { return m_current_options.NumThreads; };
 		inline const std::thread::id& GetMainThreadId() const { return m_mainThreadId; }
 		uint32_t GetPendingJobsCount() const;
 
@@ -211,10 +212,10 @@ namespace Insight::JS
 	protected:
 		std::atomic_bool m_shuttingDown = false;
 
+		JobSystemManagerOptions m_current_options;
+
 		// Threads
-		uint32_t m_numThreads;
 		Thread* m_allThreads = nullptr;
-		bool m_threadAffinity = false;
 		std::thread::id m_mainThreadId;
 
 		// Thread
@@ -229,7 +230,6 @@ namespace Insight::JS
 
 	private:
 		Callback m_mainCallback = nullptr;
-		bool m_shutdownAfterMain = true;
 
 		static void ThreadCallback_Worker(Thread* thread);
 

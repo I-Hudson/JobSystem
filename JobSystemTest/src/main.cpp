@@ -67,8 +67,9 @@ int main(int* argv, char** argc)
 
 	JS::JobSystemManagerOptions options;
 
-	JS::JobSystemManager jobSystem(options);
-	if (jobSystem.Init() != JS::JobSystemManager::ReturnCode::Succes)
+	JS::JobSystemManager jobSystem;
+
+	if (jobSystem.Init(options) != JS::JobSystemManager::ReturnCode::Succes)
 	{
 		std::cout << "Something went wrong." << '\n';
 	}

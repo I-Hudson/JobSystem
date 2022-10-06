@@ -159,7 +159,9 @@ namespace Insight::JS
 	{
 		//TODO:
 		while(GetPendingJobsCount() > 0 || GetRunningJobsCount() > 0)
-		{ }
+		{
+			Thread::SleepFor(1);
+		}
 	}
 
 	void JobSystem::Update(uint32_t const& jobsToFree)
@@ -243,10 +245,7 @@ namespace Insight::JS
 	/// JobSystemManager
 	/// </summary>
 	/// <param name="options"></param>
-	JobSystemManager::JobSystemManager(const JobSystemManagerOptions& options)
-		: m_numThreads(options.NumThreads)
-		, m_threadAffinity(options.ThreadAffinity)
-		, m_shutdownAfterMain(options.ShutdownAfterMainCallback)
+	JobSystemManager::JobSystemManager()
 	{ }
 
 	JobSystemManager::~JobSystemManager()
@@ -260,43 +259,52 @@ namespace Insight::JS
 		delete[] m_allThreads;
 	}
 
-	JobSystemManager::ReturnCode JobSystemManager::Init()
+	JobSystemManager::ReturnCode JobSystemManager::Init(const JobSystemManagerOptions& options)
 	{
+
 		if (m_allThreads)
 		{
 			return ReturnCode::AlreadyInitialized;
 		}
 
+		const uint32_t hardware_thread_count = std::thread::hardware_concurrency();
+		if (options.NumThreads == 0 || options.NumThreads > hardware_thread_count)
+		{
+			return ReturnCode::InvalidNumThreads;
+		}
+
+		m_current_options = options;
+
 		// Threads
-		m_allThreads = new Thread[m_numThreads];
+		m_allThreads = new Thread[m_current_options.NumThreads];
 
 		// Current (Main) Thread
 		m_mainThreadId = std::this_thread::get_id();
 
 		// Thread Affinity
-		if (m_threadAffinity && m_numThreads > std::thread::hardware_concurrency())
+		if (m_current_options.ThreadAffinity && m_current_options.NumThreads > hardware_thread_count)
 		{
 			return ReturnCode::ErrorThreadAffinity;
 		}
 
 		std::vector<Thread*> spawnedThreads;
 		// Spawn Threads
-		for (uint8_t i = 0; i < m_numThreads; i++)
+		for (uint8_t i = 0; i < m_current_options.NumThreads; i++)
 		{
 			TLS* ttls = m_allThreads[i].GetTLS();
 			ttls->ThreadIndex = i;
-			ttls->SetAffinity = m_threadAffinity;
+			ttls->SetAffinity = m_current_options.ThreadAffinity;
 
+			m_allThreads[i].SetThreadData(this, &m_mainJobSystem);
 			if (!m_allThreads[i].Spawn(ThreadCallback_Worker))
 			{
 				return ReturnCode::OSError;
 			}
-			m_allThreads[i].SetThreadData(this, &m_mainJobSystem);
 			spawnedThreads.push_back(&m_allThreads[i]);
 		}
 		m_mainJobSystem.m_manager = this;
 		m_mainJobSystem.m_mainThreadId = GetMainThreadId();
-		m_mainJobSystem.m_numThreads = m_numThreads;
+		m_mainJobSystem.m_numThreads = m_current_options.NumThreads;
 		m_mainJobSystem.AddThreads(spawnedThreads);
 
 		// Done
@@ -311,17 +319,17 @@ namespace Insight::JS
 		return jobSystem;
 	}
 
-	void JobSystemManager::ReseveThreads(uint32_t const& numThreads)
+	bool JobSystemManager::ReseveThreads(uint32_t const& numThreads)
 	{
-		ReseveThreads(m_mainJobSystem, numThreads);
+		return ReseveThreads(m_mainJobSystem, numThreads);
 	}
 
-	void JobSystemManager::ReseveThreads(JobSystem& jobSystem, uint32_t const& numThreads)
+	bool JobSystemManager::ReseveThreads(JobSystem& jobSystem, uint32_t const& numThreads)
 	{
 		if (m_mainJobSystem.GetNumThreads() < numThreads)
 		{
 			std::cout << "[JobSystemManager::CreateLocalJobSystem] Requested threads more than usable threads." << '\n';
-			return;
+			return false;
 		}
 
 		int threadsLeft = static_cast<int>(m_mainJobSystem.GetNumThreads());
@@ -329,6 +337,7 @@ namespace Insight::JS
 		if (threadsLeft <= 0)
 		{
 			std::cout << "[JobSystemManager::CreateLocalJobSystem] No threads left for main job system." << '\n';
+			return false;
 		}
 
 		std::vector<Thread*>::iterator itr = m_mainJobSystem.m_threads.begin() + numThreads;
@@ -337,6 +346,7 @@ namespace Insight::JS
 		m_mainJobSystem.m_threads.erase(m_mainJobSystem.m_threads.begin(), itr);
 		m_mainJobSystem.m_numThreads = threadsLeft;
 		jobSystem.AddThreads(jsThreads);
+		return true;
 	}
 
 	void JobSystemManager::ReleaseJobSystem(JobSystem& jobSystem)
@@ -407,10 +417,12 @@ namespace Insight::JS
 
 	void JobSystemManager::ThreadCallback_Worker(Thread* thread)
 	{
+		// This is where the thread will be executing.
+
 		ThreadData tData = thread->GetUserdata();
-		while (!tData.Manager && !tData.System)
+		if (!tData.Manager || !tData.System)
 		{
-			tData = thread->GetUserdata();
+			throw new std::runtime_error("[JobSystemManager::ThreadCallback_Worker] Thread data was not valid.");
 		}
 
 		auto tls = thread->GetTLS();
@@ -421,9 +433,11 @@ namespace Insight::JS
 		}
 
 		JobSharedPtr job = nullptr;
+		JobSystemManager* js_manager = tData.Manager;
 		// Thread loop. Every thread will be running this loop looking for new jobs to execute.
-		while (!tData.Manager->IsShuttingDown())
+		while (!js_manager->IsShuttingDown())
 		{
+			// Get the user data as the system this thread is assigned to could change.
 			JobSystem* system = thread->GetUserdata().System;
 			if (system->GetNextJob(job))
 			{
