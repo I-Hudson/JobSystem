@@ -400,6 +400,15 @@ namespace Insight::JS
 		return m_mainJobSystem.GetCurrentThread();
 	}
 
+	const std::thread::id JobSystem::GetThreadId(uint64_t threadIndex) const
+	{
+		if (threadIndex < GetNumThreads())
+		{
+			return m_threads.at(threadIndex)->GetID();
+		}
+		return std::thread::id();
+	}
+
 	LockFreeQueue<JobSharedPtr>* JobSystemManager::GetQueueByPriority(JobPriority priority)
 	{
 		return m_mainJobSystem.GetQueueByPriority(priority);
